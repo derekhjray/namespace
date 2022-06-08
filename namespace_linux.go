@@ -20,18 +20,18 @@ var SYS_SETNS = map[string]uintptr{
 }[runtime.GOARCH]
 
 const (
-	MNT  nstype = syscall.CLONE_NEWNS
-	UTS         = syscall.CLONE_NEWUTS
-	IPC         = syscall.CLONE_NEWIPC
-	USER        = syscall.CLONE_NEWUSER
-	PID         = syscall.CLONE_NEWPID
-	NET         = syscall.CLONE_NEWNET
+	//MNT  = syscall.CLONE_NEWNS
+	UTS  = syscall.CLONE_NEWUTS
+	IPC  = syscall.CLONE_NEWIPC
+	USER = syscall.CLONE_NEWUSER
+	PID  = syscall.CLONE_NEWPID
+	NET  = syscall.CLONE_NEWNET
 )
 
 func (n nstype) String() string {
 	switch n {
-	case MNT:
-		return "mnt"
+	//case MNT:
+	//	return "mnt"
 	case UTS:
 		return "uts"
 	case IPC:
@@ -98,7 +98,7 @@ func (ns *Namespace) Execute(fn func(...interface{}) error, args ...interface{})
 // by namespace.
 func (ns *namespace) enter() (err error) {
 	switch ns.nst {
-	case MNT, UTS, IPC, USER, PID, NET:
+	case UTS, IPC, USER, PID, NET:
 	default:
 		return ErrNotImplemented
 	}

@@ -23,7 +23,7 @@ func TestExecute(t *testing.T) {
 		return nil
 	}
 
-	ns, err := New(Types(NET), Pid(2398))
+	ns, err := New(Types(NET), Pid(101408))
 	if err != nil {
 		t.Error(err)
 		return
