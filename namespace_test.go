@@ -3,6 +3,7 @@ package namespace
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
 	"os/exec"
 	"testing"
 )
@@ -13,7 +14,7 @@ func TestExecute(t *testing.T) {
 			stdout bytes.Buffer
 		)
 
-		cmd := exec.CommandContext(context.TODO(), "ip", "link")
+		cmd := exec.CommandContext(context.TODO(), "ip", "addr")
 		cmd.Stdout = &stdout
 		if err := cmd.Run(); err != nil {
 			return nil
@@ -23,7 +24,7 @@ func TestExecute(t *testing.T) {
 		return nil
 	}
 
-	ns, err := New(Types(NET), Pid(101408))
+	ns, err := New(Types(USER, UTS, NET), Pid(3220))
 	if err != nil {
 		t.Error(err)
 		return
@@ -38,4 +39,26 @@ func TestExecute(t *testing.T) {
 	if err = iplink(); err != nil {
 		t.Error(err)
 	}
+}
+
+func TestCGO(t *testing.T) {
+	ns, err := New(Pid(3220), Types(NET, MNT))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	err = ns.Execute("cat", "/etc/passwd")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	data, err := ioutil.ReadFile("/etc/passwd")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	t.Log(string(data))
 }

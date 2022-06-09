@@ -18,6 +18,8 @@ type Namespace struct {
 	proc     string
 	pid      int
 	types    []nstype
+	flags    int64
+	prefix   string
 	currents []*namespace
 	targets  []*namespace
 }
@@ -41,6 +43,7 @@ func New(options ...Option) (*Namespace, error) {
 
 	currentNSPath := filepath.Join("/proc", strconv.Itoa(os.Getpid()), "task", strconv.Itoa(syscall.Gettid()), "ns")
 	targetNSPath := filepath.Join(ns.proc, strconv.Itoa(ns.pid), "ns")
+	ns.prefix = targetNSPath
 
 	if len(ns.types) > 0 {
 		ns.currents = make([]*namespace, 0, len(ns.types))
@@ -60,6 +63,7 @@ func New(options ...Option) (*Namespace, error) {
 			if cns != tns {
 				ns.currents = append(ns.currents, &namespace{path: cpath, nst: nst, fd: -1})
 				ns.targets = append(ns.targets, &namespace{path: tpath, nst: nst, fd: -1})
+				ns.flags |= int64(nst)
 			}
 		}
 	}
