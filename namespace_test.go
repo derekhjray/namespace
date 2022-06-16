@@ -62,3 +62,15 @@ func TestCGO(t *testing.T) {
 
 	t.Log(string(data))
 }
+
+func TestCat(t *testing.T) {
+	buffers, err := Cat([]string{"/usr/local/tomcat/conf/tomcat-users.xml", "/etc/passwd"}, 89541)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	for _, buffer := range buffers {
+		t.Log(buffer.String())
+	}
+}

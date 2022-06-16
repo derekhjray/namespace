@@ -111,7 +111,9 @@ import "C"
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -129,11 +131,17 @@ func cgoNsExecute(fn C.uintptr_t) C.int {
 	return 1
 }
 
-func (ns *Namespace) execute(fn func() int) {
+var errNSExecFailed = errors.New("namespace execute failed")
+
+func (ns *Namespace) execute(fn func() int) error {
 	cpath := C.CString(ns.prefix)
 	defer C.free(unsafe.Pointer(cpath))
 
-	C.ns_do(cpath, C.longlong(ns.flags), C.uintptr_t(cgo.NewHandle(fn)))
+	if C.ns_do(cpath, C.longlong(ns.flags), C.uintptr_t(cgo.NewHandle(fn))) != 0 {
+		return errNSExecFailed
+	}
+
+	return nil
 }
 
 // SYS_SETNS syscall allows changing the namespace of the current process.
@@ -221,7 +229,6 @@ func (ns *Namespace) Execute(command interface{}, args ...interface{}) (err erro
 					return err
 				}
 
-				fmt.Println(stdout.String())
 				return nil
 			}
 		}
@@ -232,17 +239,15 @@ func (ns *Namespace) Execute(command interface{}, args ...interface{}) (err erro
 	}
 
 	if ns.flags&MNT == MNT {
-		ns.execute(func() int {
+		return ns.execute(func() int {
 			err = fn(args...)
 			if err != nil {
-				//_, _ = fmt.Fprintf(os.Stderr, "excute command (%s) failed, reason: %v\n", program, err)
+				_, _ = fmt.Fprintf(os.Stderr, "excute task in specified namespaces failed, reason: %v\n", err)
 				return 1
 			}
 
 			return 0
 		})
-
-		return nil
 	}
 
 	resumeIndex := 0
