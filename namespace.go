@@ -100,15 +100,16 @@ func Cat(filenames []string, pid int, procfs ...string) ([]*bytes.Buffer, error)
 		defer syscall.Close(fds[1])
 
 		for index, filename := range filenames {
+			if index != 0 {
+				if _, err = syscall.Write(fds[1], delimiter); err != nil {
+					err = nil
+					return err
+				}
+			}
+
 			if data, err = ioutil.ReadFile(filename); err != nil {
 				// TODO: skip error for next file
 				continue
-			}
-
-			if index != 0 {
-				if _, err = syscall.Write(fds[1], delimiter); err != nil {
-					return err
-				}
 			}
 
 			if _, err = syscall.Write(fds[1], data); err != nil {
@@ -116,7 +117,7 @@ func Cat(filenames []string, pid int, procfs ...string) ([]*bytes.Buffer, error)
 			}
 		}
 
-		return err
+		return nil
 	})
 
 	if err != nil {
