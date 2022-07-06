@@ -42,7 +42,8 @@ static int ns_init(context_t *ctx) {
 	char *names[] = { "ipc", "uts", "user", "pid", "net", "mnt" };
 
 	int size = sizeof(flags) / sizeof(int64_t);
-	for (int i = 0; i < size; i++) {
+    int i;
+	for (i = 0; i < size; i++) {
 		if ((ctx->flags & flags[i]) == flags[i]) {
 			memcpy(ctx->namespaces[index].name, names[i], strlen(names[i]));
 			sprintf(ctx->namespaces[index].path, "%s/%s", ctx->nspath, names[i]);
@@ -70,7 +71,8 @@ static int ns_deinit(context_t *ctx) {
         return -1;
     }
 
-	for (int i = 0; i < 6; i++) {
+	int i;
+	for (i = 0; i < 6; i++) {
 		if (ctx->namespaces[i].fd > 0) {
 			close(ctx->namespaces[i].fd);
 			ctx->namespaces[i].fd = -1;
