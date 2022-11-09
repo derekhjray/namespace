@@ -1,149 +1,95 @@
-//go:build linux
-// +build linux
-
 package namespace
 
 /*
-#define _GNU_SOURCE
-#include <sched.h>
-#include <linux/sched.h>
-#include <stdint.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdio.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/wait.h>
+#include "namespace.h"
 #include <stdlib.h>
-
-typedef struct {
-    int fd;
-    char name[8];
-    char path[64];
-} namespace_t;
-
-typedef struct {
-    int64_t flags;
-	char nspath[32];
-    namespace_t namespaces[6];
-} context_t;
-
-extern int setns(int fd, int nstype);
-static int ns_init(context_t *ctx) {
-    if (NULL == ctx) {
-        fprintf(stderr, "nil namespace context\n");
-        return -1;
-    }
-
-	int index = 0;
-	int64_t flags[] = { CLONE_NEWIPC, CLONE_NEWUTS, CLONE_NEWUSER, CLONE_NEWPID, CLONE_NEWNET, CLONE_NEWNS };
-	char *names[] = { "ipc", "uts", "user", "pid", "net", "mnt" };
-
-	int size = sizeof(flags) / sizeof(int64_t);
-    int i;
-	for (i = 0; i < size; i++) {
-		if ((ctx->flags & flags[i]) == flags[i]) {
-			memcpy(ctx->namespaces[index].name, names[i], strlen(names[i]));
-			sprintf(ctx->namespaces[index].path, "%s/%s", ctx->nspath, names[i]);
-			ctx->namespaces[index].fd = open(ctx->namespaces[index].path, O_RDONLY | O_CLOEXEC);
-			if (-1 == ctx->namespaces[index].fd) {
-				fprintf(stderr, "enter %s namespace failed, reason: %s\n", ctx->namespaces[index].name, strerror(errno));
-				return -1;
-			}
-
-			if (-1 == setns(ctx->namespaces[index].fd, 0)) {
-				fprintf(stderr, "enter %s namespace failed, reason: %s\n", ctx->namespaces[index].name, strerror(errno));
-				return -1;
-			}
-
-			index++;
-		}
-	}
-
-	return 0;
-}
-
-static int ns_deinit(context_t *ctx) {
-    if (NULL == ctx) {
-        fprintf(stderr, "nil namespace context\n");
-        return -1;
-    }
-
-	int i;
-	for (i = 0; i < 6; i++) {
-		if (ctx->namespaces[i].fd > 0) {
-			close(ctx->namespaces[i].fd);
-			ctx->namespaces[i].fd = -1;
-		}
-	}
-}
-
-extern int cgoNsExecute(uintptr_t);
-static int ns_do(char *path, long long int flags, uintptr_t fn) {
-	pid_t pid = fork();
-	if (-1 == pid) {
-		fprintf(stderr, "create namespace executor process failed, reason: %s\n", strerror(errno));
-		return 1;
-	} else if (0 == pid) {
-		context_t ctx;
-		memset(&ctx, 0, sizeof(context_t));
-		ctx.flags = flags;
-		memcpy(ctx.nspath, path, strlen(path));
-
-		if (-1 == ns_init(&ctx)) {
-			ns_deinit(&ctx);
-			exit(1);
-		}
-
-		cgoNsExecute(fn);
-
-		ns_deinit(&ctx);
-		exit(0);
-	}
-
-	wait(NULL);
-
-	return 0;
-}
+#include <string.h>
+#include <sys/stat.h>
+typedef struct stat stat_t;
 */
 import "C"
 
 import (
 	"bytes"
 	_ "embed"
-	"errors"
 	"fmt"
+	"github.com/derekhjray/namespace/types"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"runtime/cgo"
 	"syscall"
 	"unsafe"
 )
 
-//export cgoNsExecute
-func cgoNsExecute(fn C.uintptr_t) C.int {
-	if task, ok := cgo.Handle(fn).Value().(func() int); ok {
-		return C.int(task())
+func ReadFile(filename, ns string) (*bytes.Buffer, error) {
+	var (
+		errno int
+		err   error
+	)
+
+	cfile := C.CString(filename)
+	cns := C.CString(ns)
+	defer func() {
+		C.free(unsafe.Pointer(cfile))
+		C.free(unsafe.Pointer(cns))
+	}()
+
+	data := C.ns_read(cfile, cns, (*C.int)(unsafe.Pointer(&errno)))
+	if errno != 0 {
+		err = syscall.Errno(errno)
 	}
 
-	return 1
+	if data == nil {
+		return nil, err
+	}
+	defer C.free(unsafe.Pointer(data))
+
+	buf := C.GoBytes(unsafe.Pointer(data), C.int(C.strlen(data)))
+
+	return bytes.NewBuffer(buf), err
 }
 
-var errNSExecFailed = errors.New("namespace execute failed")
+func Stat(filename, ns string) (*types.FileInfo, error) {
+	var (
+		errno C.int
+		err   error
+	)
 
-func (ns *Namespace) execute(fn func() int) error {
-	cpath := C.CString(ns.prefix)
-	defer C.free(unsafe.Pointer(cpath))
+	cfile := C.CString(filename)
+	cns := C.CString(ns)
+	defer func() {
+		C.free(unsafe.Pointer(cfile))
+		C.free(unsafe.Pointer(cns))
+	}()
 
-	if C.ns_do(cpath, C.longlong(ns.flags), C.uintptr_t(cgo.NewHandle(fn))) != 0 {
-		return errNSExecFailed
+	var st C.stat_t
+	errno = C.ns_stat(cfile, cns, (unsafe.Pointer)(&st))
+	if errno != 0 {
+		err = syscall.Errno(errno)
 	}
 
-	return nil
+	if err != nil {
+		return nil, err
+	}
+
+	fi := &types.FileInfo{
+		Name:       filename,
+		Uid:        int(st.st_uid),
+		Gid:        int(st.st_gid),
+		Size:       int64(st.st_size),
+		Mode:       int64(st.st_mode),
+		Inode:      int64(st.st_ino),
+		BlockSize:  int64(st.st_blksize),
+		Blocks:     int64(st.st_blocks),
+		Links:      int64(st.st_nlink),
+		AccessTime: int64(st.st_atim.tv_sec*1e9 + st.st_atim.tv_nsec),
+		ModifyTime: int64(st.st_mtim.tv_sec*1e9 + st.st_mtim.tv_nsec),
+	}
+
+	fi.Perm = os.FileMode(fi.Mode).Perm().String()
+
+	return fi, nil
 }
 
 // SYS_SETNS syscall allows changing the namespace of the current process.
@@ -204,52 +150,30 @@ func (ns *Namespace) Execute(command interface{}, args ...interface{}) (err erro
 		}
 
 		args = nil
-		if ns.flags&MNT == MNT {
-			fn = func(_ ...interface{}) error {
-				bin, e := exec.LookPath(program)
-				if e != nil {
-					return e
+		fn = func(_ ...interface{}) error {
+			var (
+				stdout bytes.Buffer
+				stderr bytes.Buffer
+			)
+
+			cmd := exec.Command(program, cmdline[1:]...)
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			if err = cmd.Run(); err != nil {
+				if stderr.Len() > 0 {
+					err = fmt.Errorf("%v, %s", err, stderr.String())
 				}
 
-				return syscall.Exec(bin, cmdline, nil)
+				return err
 			}
-		} else {
-			fn = func(_ ...interface{}) error {
-				var (
-					stdout bytes.Buffer
-					stderr bytes.Buffer
-				)
 
-				cmd := exec.Command(program, cmdline[1:]...)
-				cmd.Stdout = &stdout
-				cmd.Stderr = &stderr
-				if err = cmd.Run(); err != nil {
-					if stderr.Len() > 0 {
-						err = fmt.Errorf("%v, %s", err, stderr.String())
-					}
-
-					return err
-				}
-
-				return nil
-			}
+			fmt.Println(stdout.String())
+			return nil
 		}
 	}
 
 	if len(ns.currents) == 0 {
 		return fn(args...)
-	}
-
-	if ns.flags&MNT == MNT {
-		return ns.execute(func() int {
-			err = fn(args...)
-			if err != nil {
-				_, _ = fmt.Fprintf(os.Stderr, "excute task in specified namespaces failed, reason: %v\n", err)
-				return 1
-			}
-
-			return 0
-		})
 	}
 
 	resumeIndex := 0

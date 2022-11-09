@@ -3,6 +3,11 @@
 
 package namespace
 
+import (
+	"bytes"
+	"github.com/derekhjray/namespace/types"
+)
+
 const (
 	MNT nstype = iota
 	UTS
@@ -34,4 +39,12 @@ func (ns *namespace) active() error {
 
 func (ns *namespace) deinit() error {
 	return ErrNotImplemented
+}
+
+func ReadFile(filename, ns string) (*bytes.Buffer, error) {
+	return nil, ErrNotImplemented
+}
+
+func Stat(filename, ns string) (*types.FileInfo, error) {
+	return nil, ErrNotImplemented
 }
