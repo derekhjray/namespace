@@ -94,7 +94,7 @@ const char* ns_read(const char *filename, const char *path, int *err) {
 
       error:
         ((int*)(buf))[0] = errno;
-        res = write(fds[1], buf, sizeof(int));
+        res = write(fds[1], buf, sizeof(int) * 2);
         close(fds[1]);
         exit(1);
     }
@@ -237,7 +237,7 @@ const int ns_stat(const char *filename, const char *path, void *userdata) {
 
       error:
         buf[0] = errno;
-        res = write(fds[1], buf, sizeof(int64_t));
+        res = write(fds[1], buf, sizeof(int64_t) * 11);
         close(fds[1]);
         exit(1);
     }
