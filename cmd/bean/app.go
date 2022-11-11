@@ -44,10 +44,10 @@ func init() {
 }
 
 type App struct {
-	command   string
-	artifacts []string
-	namespace string
-	help      bool
+	command    string
+	artifacts  []string
+	namespaces []string
+	help       bool
 }
 
 func (app *App) Execute() {
@@ -62,8 +62,6 @@ func (app *App) Execute() {
 	if err != nil {
 		Fatalf("Create pipe failed, %v", err)
 	}
-
-	namespaces := []string{app.namespace}
 
 	cmd := &exec.Cmd{
 		Path:       os.Args[0],
@@ -85,7 +83,7 @@ func (app *App) Execute() {
 	r := nl.NewNetlinkRequest(int(libcontainer.InitMsg), 0)
 	r.AddData(&libcontainer.Bytemsg{
 		Type:  libcontainer.NsPathsAttr,
-		Value: []byte(strings.Join(namespaces, ",")),
+		Value: []byte(strings.Join(app.namespaces, ",")),
 	})
 	if _, err = io.Copy(parent, bytes.NewReader(r.Serialize())); err != nil {
 		Fatalf("Write bean namespace configure failed, %v", err)
@@ -199,7 +197,10 @@ func (app *App) parse() {
 				os.Exit(1)
 			}
 
-			app.namespace = fmt.Sprintf("mnt:%s/proc/%d/ns/mnt", os.Getenv("HOSTFS"), pid)
+			app.namespaces = []string{
+				fmt.Sprintf("mnt:%s/proc/%d/ns/mnt", os.Getenv("HOSTFS"), pid),
+				//fmt.Sprintf("pid:/proc/%d/ns/pid", pid),
+			}
 			i++
 		default:
 			args = append(args, os.Args[i])
@@ -214,13 +215,13 @@ func (app *App) parse() {
 		return
 	}
 
-	if app.namespace == "" {
+	if len(app.namespaces) == 0 {
 		if os.Getenv("CONTAINER_MOUNT") == "" {
 			_, _ = fmt.Fprintf(os.Stderr, "Container namespace is not specified\n")
 			os.Exit(1)
 		}
 
-		app.namespace = os.Getenv("CONTAINER_MOUNT")
+		app.namespaces = []string{os.Getenv("CONTAINER_MOUNT")}
 	}
 
 	app.parseCommand(args...)
