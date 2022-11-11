@@ -19,6 +19,7 @@
 
 int setns(int fd, int nstype);
 
+// wait_pid is a noblocking waitpid implementation
 static void wait_pid(int pid, int microseconds) {
     int elapse = 0;
     fprintf(stderr, "pid: %d\n", pid);
@@ -34,12 +35,16 @@ static void wait_pid(int pid, int microseconds) {
         usleep(100000);
         elapse += 100000;
         if (elapse > microseconds) {
+            // kill specified process if not finished in required time
             kill(pid, SIGKILL);
+            usleep(3000000); // sleep 3s
+            waitpid(pid, NULL, WNOHANG); // cleanup finished process
             break;
         }
     }
 }
 
+// ns_read read files from another mount namespace
 const char* ns_read(const char *filename, const char *path, int *err) {
     int fds[2];
     if (-1 == pipe(fds)) {
@@ -101,6 +106,7 @@ const char* ns_read(const char *filename, const char *path, int *err) {
     char *buf = NULL;
     close(fds[1]);
     char data[1024];
+    // enable noblock read
     if (-1 == fcntl(fds[0], F_SETFL, O_NONBLOCK)) {
         *err = errno;
         goto exit;
