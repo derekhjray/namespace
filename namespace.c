@@ -22,7 +22,6 @@ int setns(int fd, int nstype);
 // wait_pid is a noblocking waitpid implementation
 static void wait_pid(int pid, int microseconds) {
     int elapse = 0;
-    fprintf(stderr, "pid: %d\n", pid);
     while(1) {
         int res = waitpid(pid, NULL, WNOHANG);
         if (res == -1 || res == pid) {
