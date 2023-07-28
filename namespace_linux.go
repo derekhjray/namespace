@@ -83,8 +83,8 @@ func Stat(filename, ns string) (*types.FileInfo, error) {
 		BlockSize:  int64(st.st_blksize),
 		Blocks:     int64(st.st_blocks),
 		Links:      int64(st.st_nlink),
-		AccessTime: int64(st.st_atim.tv_sec*1e9 + st.st_atim.tv_nsec),
-		ModifyTime: int64(st.st_mtim.tv_sec*1e9 + st.st_mtim.tv_nsec),
+		AccessTime: int64(st.st_atim.tv_sec)*1e9 + int64(st.st_atim.tv_nsec),
+		ModifyTime: int64(st.st_mtim.tv_sec)*1e9 + int64(st.st_mtim.tv_nsec),
 	}
 
 	fi.Perm = os.FileMode(fi.Mode).Perm().String()
